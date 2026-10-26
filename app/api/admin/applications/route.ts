@@ -40,11 +40,8 @@ export async function GET(req: Request) {
       deduplicated.push(r);
     }
 
-    // Sort: Paid first, then by latest created_at
+    // Sort: Latest arrived first (newest created_at descending)
     deduplicated.sort((a, b) => {
-      if (a.payment_completed !== b.payment_completed) {
-        return a.payment_completed ? -1 : 1;
-      }
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 

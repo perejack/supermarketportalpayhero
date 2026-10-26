@@ -15,6 +15,11 @@ import {
   Clock,
   Check,
   Tag,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -54,6 +59,9 @@ export default function AdminPage() {
   const [q, setQ] = useState("");
   const [dateFilter, setDateFilter] = useState(""); // YYYY-MM-DD
   const [tab, setTab] = useState<"all" | "today" | "paid" | "unpaid" | "not_used" | "used">("all");
+  const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
   const [selected, setSelected] = useState<ApplicationRow | null>(null);
 
   const queryClient = useQueryClient();
@@ -62,6 +70,11 @@ export default function AdminPage() {
     queryKey: ["admin-applications"],
     queryFn: fetchApplications,
   });
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setPage(1);
+  }, [q, dateFilter, tab, sortOrder, pageSize]);
 
   // If applicant data exists in this browser's localStorage, sync it so it appears immediately
   useEffect(() => {
@@ -122,7 +135,7 @@ export default function AdminPage() {
   }, [data]);
 
   const filtered = useMemo(() => {
-    let list = data ?? [];
+    let list = (data ?? []).slice();
     const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
     if (tab === "today") {
@@ -143,18 +156,35 @@ export default function AdminPage() {
     }
 
     const query = q.trim().toLowerCase();
-    if (!query) return list;
-    return list.filter((r) => {
-      return (
-        r.full_name.toLowerCase().includes(query) ||
-        r.staff_number.toLowerCase().includes(query) ||
-        r.position.toLowerCase().includes(query) ||
-        (r.branch ?? "").toLowerCase().includes(query) ||
-        r.employer.toLowerCase().includes(query) ||
-        (r.payment_ref ?? "").toLowerCase().includes(query)
-      );
+    if (query) {
+      list = list.filter((r) => {
+        return (
+          r.full_name.toLowerCase().includes(query) ||
+          r.staff_number.toLowerCase().includes(query) ||
+          r.position.toLowerCase().includes(query) ||
+          (r.branch ?? "").toLowerCase().includes(query) ||
+          r.employer.toLowerCase().includes(query) ||
+          (r.payment_ref ?? "").toLowerCase().includes(query)
+        );
+      });
+    }
+
+    // Always sort by latest arrived (newest created_at first) by default
+    list.sort((a, b) => {
+      const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return sortOrder === "latest" ? diff : -diff;
     });
-  }, [data, q, tab, dateFilter]);
+
+    return list;
+  }, [data, q, tab, dateFilter, sortOrder]);
+
+  // Paginated slice
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const paginatedList = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   function exportToCSV(rows: ApplicationRow[]) {
     if (!rows || rows.length === 0) {
@@ -318,8 +348,37 @@ export default function AdminPage() {
             </Button>
           )}
         </div>
-        <div className="text-sm text-muted-foreground">
-          {isLoading ? "Loading…" : `${filtered.length.toLocaleString()} records`}
+
+        {/* Sort by Latest / Oldest */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-10 text-xs font-semibold gap-1.5 shrink-0"
+          onClick={() => setSortOrder((prev) => (prev === "latest" ? "oldest" : "latest"))}
+          title="Click to toggle sorting"
+        >
+          <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+          <span>Sort: {sortOrder === "latest" ? "Latest Arrived" : "Oldest First"}</span>
+        </Button>
+
+        {/* Page size select */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+          <span>Show:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="h-9 rounded-lg border bg-background px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value={10}>10</option>
+            <option value={15}>15</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+
+        <div className="text-xs text-muted-foreground whitespace-nowrap">
+          {isLoading ? "Loading…" : `${filtered.length.toLocaleString()} total`}
         </div>
       </div>
 
@@ -342,7 +401,7 @@ export default function AdminPage() {
         )}
 
         {!isLoading &&
-          filtered.map((r) => (
+          paginatedList.map((r) => (
             <Card
               key={r.id}
               className="cursor-pointer rounded-2xl p-4 transition hover:-translate-y-0.5 hover:shadow-lg"
@@ -426,6 +485,82 @@ export default function AdminPage() {
             </Card>
           ))}
       </div>
+
+      {/* Pagination Controls */}
+      {!isLoading && filtered.length > 0 && (
+        <div className="mt-6 flex flex-col items-center justify-between gap-4 rounded-2xl border bg-card/60 p-4 sm:flex-row">
+          <div className="text-xs text-muted-foreground">
+            Showing{" "}
+            <span className="font-semibold text-foreground">
+              {Math.min(filtered.length, (currentPage - 1) * pageSize + 1)}
+            </span>{" "}
+            to{" "}
+            <span className="font-semibold text-foreground">
+              {Math.min(filtered.length, currentPage * pageSize)}
+            </span>{" "}
+            of <span className="font-semibold text-foreground">{filtered.length}</span> applications
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {/* First Page */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setPage(1)}
+              disabled={currentPage <= 1}
+              title="First Page"
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+
+            {/* Previous Page */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 px-2.5 text-xs font-semibold"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              <span>Previous</span>
+            </Button>
+
+            {/* Page Indicator */}
+            <div className="mx-2 flex items-center gap-1 text-xs">
+              <span className="rounded-md bg-primary/10 px-2.5 py-1 font-bold text-primary">
+                {currentPage}
+              </span>
+              <span className="text-muted-foreground">of</span>
+              <span className="font-semibold text-foreground">{totalPages}</span>
+            </div>
+
+            {/* Next Page */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 px-2.5 text-xs font-semibold"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              <span>Next</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+
+            {/* Last Page */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setPage(totalPages)}
+              disabled={currentPage >= totalPages}
+              title="Last Page"
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {selected && (
