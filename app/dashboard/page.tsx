@@ -43,8 +43,8 @@ export default function DashboardPage() {
     { key: "locker", label: "Locker Key", icon: KeyRound, done: !!onb.lockerRequested, to: "/onboarding/locker" as const },
     { key: "training", label: "Training Materials", icon: BookOpen, done: !!(onb.trainingAccepted && onb.trainingReviewed), to: "/onboarding/training" as const },
     { key: "id", label: "National ID Upload", icon: ScanLine, done: hasId, to: "/onboarding/id" as const },
-    { key: "payment", label: "Item Purchase Processing Fee (KES 650)", icon: CreditCard, done: !!onb.paymentCompleted, to: (hasId ? "/onboarding/payment" : "/onboarding/id") as const },
-    { key: "contract", label: "Employment Contract", icon: FileSignature, done: !!onb.contractDownloaded, to: (hasId ? "/onboarding/contract" : "/onboarding/id") as const },
+    { key: "payment", label: "Item Purchase Processing Fee (KES 650)", icon: CreditCard, done: !!onb.paymentCompleted, to: hasId ? "/onboarding/payment" : "/onboarding/id" },
+    { key: "contract", label: "Employment Contract", icon: FileSignature, done: !!onb.contractDownloaded, to: hasId ? "/onboarding/contract" : "/onboarding/id" },
   ];
   const completed = tasks.filter((t) => t.done).length;
   const pct = Math.round((completed / tasks.length) * 100);
